@@ -1,0 +1,59 @@
+# ------------------------------
+# PyCharm / IntelliJ
+# ------------------------------
+.idea/
+*.iml
+
+# ------------------------------
+# Python
+# ------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Byte-compiled / packaging
+build/
+dist/
+*.egg-info/
+
+# ------------------------------
+# Machine Learning / Data
+# ------------------------------
+
+*.jsonl
+*.parquet
+*.h5
+*.npy
+*.npz
+
+# Model checkpoints
+checkpoints/
+models/
+*.pt
+*.pth
+*.ckpt
+*.joblib
+*.pkl
+
+# Experiment logs
+logs/
+wandb/
+mlruns/          # MLflow
+tensorboard/
+tb_logs/
+
+# ------------------------------
+# OS / Misc
+# ------------------------------
+.DS_Store
+Thumbs.db
