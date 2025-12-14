@@ -4,112 +4,89 @@ from tqdm import tqdm
 import torch
 from transformers import CanineTokenizer, CanineModel
 
-# # LOAD MODEL
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# tokenizer = CanineTokenizer.from_pretrained("google/canine-c")
-# model = CanineModel.from_pretrained("google/canine-c").to(device)
-# model.eval()
-#
-# # EMBEDDING FUNCTION
-# def embed_batch(urls, max_length=256):
-#     tokens = tokenizer(
-#         urls,
-#         padding=True,
-#         truncation=True,
-#         max_length=max_length,
-#         return_tensors="pt"
-#     ).to(device)
-#
-#     with torch.no_grad():
-#         outputs = model(**tokens)
-#
-#     cls_emb = outputs.last_hidden_state[:, 0, :]  # (batch, hidden_size)
-#     return cls_emb.cpu().numpy()
-#
-#
-# def embed_all(urls, batch_size=64):
-#     all_embs = []
-#     for i in tqdm(range(0, len(urls), batch_size)):
-#         batch = urls[i:i+batch_size]
-#         all_embs.append(embed_batch(batch))
-#     return np.vstack(all_embs)
-#
-# df = pd.read_csv("../basic_data.csv")
-# urls = df["url"].astype(str).tolist()
-# labels = df["label"].values
-#
-# print("Embedding entire dataset...")
-# X = embed_all(urls, batch_size=32)
-#
-# np.save("all_X.npy", X)
-# np.save("all_y.npy", labels)
-#
-# print("Saved all_X.npy and all_y.npy")
+
+# Load CANINE Model + Tokenizer
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")   # Apple Silicon GPU
+else:
+    device = torch.device("cpu")
+
+print("Using device:", device)
+
+tokenizer = CanineTokenizer.from_pretrained("google/canine-c")
+model = CanineModel.from_pretrained("google/canine-c").to(device)
+model.eval()
 
 
-import numpy as np
-import pandas as pd
 
-# Load embeddings
-X = np.load("all_X.npy")
-y = np.load("all_y.npy")
+# Batch Embedding Function
+def embed_batch(urls, max_length=256):
+    """Embed a batch of URLs using CANINE CLS token."""
+    tokens = tokenizer(
+        urls,
+        padding=True,
+        truncation=True,
+        max_length=max_length,
+        return_tensors="pt"
+    ).to(device)
 
-df = pd.DataFrame({"label": y})
-df["idx"] = np.arange(len(df))    # keep original order
+    with torch.no_grad():
+        outputs = model(**tokens)
 
-phish_idx  = df[df.label == 1].idx.values
-benign_idx = df[df.label == 0].idx.values
-
-
-# TRAIN (balanced 1:1)
-np.random.seed(42)
-
-train_phish  = phish_idx
-train_benign = np.random.choice(benign_idx, size=len(train_phish), replace=False)
-
-train_idx = np.concatenate([train_phish, train_benign])
-np.random.shuffle(train_idx)
+    # CLS vector = first token in sequence
+    cls_emb = outputs.last_hidden_state[:, 0, :]
+    return cls_emb.cpu().numpy()
 
 
-# VALIDATION 1:5
-val_phish  = np.random.choice(phish_idx,  5000, replace=False)
-val_benign = np.random.choice(benign_idx, 25000, replace=False)
 
-val_idx = np.concatenate([val_phish, val_benign])
-np.random.shuffle(val_idx)
+# Embed the Entire Dataset Split
+def embed_all(urls, batch_size=64):
+    """Embed all URLs by accumulating batch embeddings."""
+    all_embs = []
+    for i in tqdm(range(0, len(urls), batch_size), desc="Embedding"):
+        batch = urls[i:i + batch_size]
+        embs = embed_batch(batch)
+        all_embs.append(embs)
 
-
-# TEST A (1:10)
-np.random.seed(100)
-
-testA_phish  = np.random.choice(phish_idx,  5000, replace=False)
-testA_benign = np.random.choice(benign_idx, 50000, replace=False)
-
-testA_idx = np.concatenate([testA_phish, testA_benign])
-np.random.shuffle(testA_idx)
-
-# ---------------------------
-# TEST B (1:20)
-np.random.seed(200)
-
-testB_phish  = np.random.choice(phish_idx,  5000, replace=False)
-testB_benign = np.random.choice(benign_idx, 100000, replace=False)
-
-testB_idx = np.concatenate([testB_phish, testB_benign])
-np.random.shuffle(testB_idx)
+    return np.vstack(all_embs)
 
 
-# SAVE SPLITS
-np.save("../processed_data/embedded_data/train_X.npy", X[train_idx])
-np.save("../processed_data/embedded_data/train_y.npy", y[train_idx])
+# Process One Dataset Split (train/val/testA)
+def process_split(csv_path, prefix):
+    """
+    Loads a CSV split (train/val/testA), embeds URLs,
+    and saves .npy vectors + labels.
+    """
 
-np.save("../processed_data/embedded_data/val_X.npy", X[val_idx])
-np.save("../processed_data/embedded_data/val_y.npy", y[val_idx])
+    print(f"\n=== Processing {prefix} ===")
 
-np.save("../processed_data/embedded_data/testA_X.npy", X[testA_idx])
-np.save("../processed_data/embedded_data/testA_y.npy", y[testA_idx])
+    df = pd.read_csv(csv_path)
+    df.columns = df.columns.str.lower()
 
-np.save("../processed_data/embedded_data/testB_X.npy", X[testB_idx])
-np.save("../processed_data/embedded_data/testB_y.npy", y[testB_idx])
+    if "url" not in df.columns or "label" not in df.columns:
+        raise ValueError(f"{csv_path} must contain 'url' and 'label' columns.")
 
-print("Saved train, val, testA, testB .npy files.")
+    urls = df["url"].astype(str).tolist()
+    labels = df["label"].astype(int).values
+
+    print(f"{prefix}: Found {len(urls)} URLs")
+
+    # Embed URLs
+    X = embed_all(urls, batch_size=32)
+
+    # Save outputs
+    np.save(f"../processed_data/embedded_data/{prefix}_X.npy", X)
+    np.save(f"../processed_data/embedded_data/{prefix}_y.npy", labels)
+
+    print(f"Saved {prefix}_X.npy   shape={X.shape}")
+    print(f"Saved {prefix}_y.npy   shape={labels.shape}")
+
+
+# Run for ALL 3 SPLITS
+process_split("../processed_data/basic_data/train.csv", "train")
+process_split("../processed_data/basic_data/val.csv",   "val")
+process_split("../processed_data/basic_data/testA.csv", "testA")
+
+print("\nAll splits embedded and saved successfully.")
