@@ -1,0 +1,4 @@
+model,best_params,accuracy,precision,recall,f1
+logistic_regression,{'C': 1},0.8924,0.6336753168376584,0.84,0.7223942208462333
+svm,"{'C': 1, 'kernel': 'rbf'}",0.9575,0.8388211751864654,0.9222,0.8785367247785082
+random_forest,"{'max_depth': 20, 'n_estimators': 50}",0.9783666666666667,0.9083912145672987,0.9678,0.9371550305025661

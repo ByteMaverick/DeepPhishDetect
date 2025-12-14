@@ -59,6 +59,7 @@ def split_data(data_path,save_path):
 
         print("TEST A SIZE:", len(testA_df),
               " | Benign:", sum(testA_df.label==0),
+
               " | Phish:", sum(testA_df.label==1))
 
 
@@ -80,6 +81,7 @@ def split_data(data_path,save_path):
         val_df.to_csv(f"{save_path}/val.csv", index=False)
         testA_df.to_csv(f"{save_path}/testA.csv", index=False)
         testB_df.to_csv(f"{save_path}/testB.csv", index=False)
+
 
         print("\nSaved: train.csv, val.csv, testA.csv, testB.csv")
 
